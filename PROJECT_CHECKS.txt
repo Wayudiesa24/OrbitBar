@@ -1,0 +1,12 @@
+OrbitBar V1 validation summary
+==============================
+- Android manifest, theme and icon XML parsed successfully.
+- Java sources passed a javac syntax scan (Android symbols unresolved as expected without android.jar).
+- App classes and manifest service declarations are present.
+- GitHub Actions workflow is included to build an actual debug APK.
+
+NOT YET VERIFIED:
+- Android Gradle compilation, emulator execution and physical phone tests.
+- The authoring environment has no Android SDK, android.jar, Gradle, or network access for downloading them.
+
+How to finish verification: push project into a GitHub repo and run the included Android Debug APK workflow. Then test on a phone. See README.md for the instructions.
