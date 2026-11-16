@@ -1,6 +1,7 @@
 package com.orbitbar.app;
 
 import android.app.ActivityOptions;
+import android.animation.ValueAnimator;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -10,6 +11,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.PixelFormat;
+import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
@@ -42,6 +44,7 @@ import java.util.Set;
 public class OverlayService extends Service {
     static final String ACTION_REFRESH = "com.orbitbar.app.REFRESH";
     private static final String ACTION_STOP = "com.orbitbar.app.STOP";
+    static final String ACTION_SHOW = "com.orbitbar.app.SHOW";
     private static final String CHANNEL = "orbitbar_taskbar";
     static volatile boolean isRunning = false;
     private WindowManager windowManager;
@@ -69,6 +72,11 @@ public class OverlayService extends Service {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             stopSelf(); return START_NOT_STICKY;
         }
+        if (intent != null && ACTION_SHOW.equals(intent.getAction())) {
+            expanded = true;
+            manuallyHidden = false;
+            phoneControls = false;
+        }
         startForegroundNow();
         if (!Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "OrbitBar needs overlay permission", Toast.LENGTH_LONG).show();
@@ -92,12 +100,19 @@ public class OverlayService extends Service {
         PendingIntent stop = PendingIntent.getService(this, 1,
                 new Intent(this, OverlayService.class).setAction(ACTION_STOP),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent show = PendingIntent.getService(this, 2,
+                new Intent(this, OverlayService.class).setAction(ACTION_SHOW),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification note = new Notification.Builder(this, CHANNEL)
                 .setContentTitle("OrbitBar is running")
-                .setContentText("Tap for settings · taskbar is active")
+                .setContentText(manuallyHidden && Prefs.hideStyle(this).equals("off")
+                        ? "Taskbar hidden — tap Show to restore"
+                        : "Taskbar active — tap Show to expand")
                 .setSmallIcon(R.drawable.ic_orbitbar)
                 .setContentIntent(open)
                 .setOngoing(true)
+                .addAction(new Notification.Action.Builder(
+                        android.R.drawable.ic_menu_view, "Show", show).build())
                 .addAction(new Notification.Action.Builder(
                         android.R.drawable.ic_menu_close_clear_cancel, "Stop", stop).build())
                 .build();
@@ -129,15 +144,22 @@ public class OverlayService extends Service {
         if (!Settings.canDrawOverlays(this)) return;
         String mode = Prefs.mode(this);
         String hideStyle = Prefs.hideStyle(this);
+        if (manuallyHidden && "off".equals(hideStyle)) return;
         boolean edge = mode.equals("edge");
-        boolean sideHandle = !expanded && (manuallyHidden ? hideStyle.equals("side") : edge);
-        boolean sideAnchor = expanded ? edge : sideHandle;
+        boolean bubble = mode.equals("bubble");
+        boolean freeBubble = !expanded && !manuallyHidden && bubble;
+        boolean freeMini = !expanded && manuallyHidden && !hideStyle.equals("side");
+        boolean freePosition = freeBubble || freeMini;
+        boolean sideHandle = !expanded && !freeBubble &&
+                (manuallyHidden ? hideStyle.equals("side") : edge);
+        boolean sideAnchor = expanded ? (edge || bubble) : sideHandle;
         int width = expanded ? (sideAnchor ? Math.min(screenWidth() - Ui.dp(this, 20), Ui.dp(this, 326))
                         : Math.min(screenWidth() - Ui.dp(this, 20), Ui.dp(this, 510)))
-                : (manuallyHidden || edge) ? WindowManager.LayoutParams.WRAP_CONTENT
+                : (manuallyHidden || edge || bubble) ? WindowManager.LayoutParams.WRAP_CONTENT
                 : mode.equals("taskbar") ? WindowManager.LayoutParams.MATCH_PARENT
                 : Math.min(screenWidth() - Ui.dp(this, 20), Ui.dp(this, 368));
-        int gravity = sideAnchor ? (Gravity.END | Gravity.CENTER_VERTICAL)
+        int gravity = freePosition ? (Gravity.TOP | Gravity.START)
+                : sideAnchor ? (Gravity.END | Gravity.CENTER_VERTICAL)
                 : (Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
         if (!expanded) flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
@@ -146,29 +168,160 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 flags, PixelFormat.TRANSLUCENT);
         windowParams.gravity = gravity;
-        int edgeLimit = Math.max(0, getResources().getDisplayMetrics().heightPixels / 2 - Ui.dp(this, 68));
-        windowParams.y = sideAnchor ? Math.max(-edgeLimit, Math.min(edgeLimit, Prefs.edgeOffset(this))) : Ui.dp(this, 24);
-        windowParams.x = sideAnchor ? Ui.dp(this, 4) : 0;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        int edgeLimit = Math.max(0, screenH / 2 - Ui.dp(this, 68));
+        if (freeBubble) {
+            int diameter = Ui.dp(this, Prefs.bubbleSize(this) + 10);
+            int defaultX = screenWidth() - diameter - Ui.dp(this, 8);
+            windowParams.x = clamp(Prefs.bubbleX(this) < 0 ? defaultX : Prefs.bubbleX(this),
+                    0, Math.max(0, screenWidth() - diameter));
+            windowParams.y = clamp(Prefs.bubbleY(this) < 0 ? screenH / 3 : Prefs.bubbleY(this),
+                    Ui.dp(this, 24), Math.max(Ui.dp(this, 24), screenH - diameter - Ui.dp(this, 35)));
+        } else if (freeMini) {
+            int miniW = Ui.dp(this, (hideStyle.equals("dot") ? 44 : 105) + 16);
+            int miniH = Ui.dp(this, 58);
+            windowParams.x = clamp(Prefs.miniX(this) < 0 ? (screenWidth() - miniW) / 2 : Prefs.miniX(this),
+                    0, Math.max(0, screenWidth() - miniW));
+            windowParams.y = clamp(Prefs.miniY(this) < 0 ? screenH - miniH - Ui.dp(this, 42) : Prefs.miniY(this),
+                    Ui.dp(this, 24), Math.max(Ui.dp(this, 24), screenH - miniH - Ui.dp(this, 35)));
+        } else {
+            windowParams.y = sideAnchor
+                    ? clamp(Prefs.edgeOffset(this), -edgeLimit, edgeLimit) : Ui.dp(this, 24);
+            windowParams.x = sideAnchor ? Ui.dp(this, 4) : 0;
+        }
         windowParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
         windowParams.setTitle("OrbitBar taskbar");
 
         LinearLayout panel = Ui.vertical(this);
-        panel.setPadding(Ui.dp(this, expanded ? 13 : 8), Ui.dp(this, expanded ? 12 : 7),
-                Ui.dp(this, expanded ? 13 : 8), Ui.dp(this, expanded ? 12 : 7));
-        GradientDrawable bg = Ui.shape(0xF21A2035, expanded ? 23 : 19, this);
+        int pad = freeBubble ? 5 : expanded ? 13 : 8;
+        panel.setPadding(Ui.dp(this, pad), Ui.dp(this, freeBubble ? 5 : expanded ? 12 : 7),
+                Ui.dp(this, pad), Ui.dp(this, freeBubble ? 5 : expanded ? 12 : 7));
+        GradientDrawable bg = Ui.shape(
+                Color.argb((int)(255f * Prefs.opacity(this) / 100f), 26, 32, 53),
+                freeBubble ? 90 : expanded ? 23 : 19, this);
         bg.setStroke(Ui.dp(this, 1), 0xFF3F4C70);
         panel.setBackground(bg);
         panel.setElevation(Ui.dp(this, 12));
         if (expanded) buildExpanded(panel);
+        else if (freeBubble) buildBubbleHandle(panel);
         else if (sideHandle) buildEdgeHandle(panel);
         else if (manuallyHidden) buildMiniHandle(panel, hideStyle.equals("dot"));
         else buildCollapsed(panel, mode.equals("taskbar"));
         overlay = panel;
-        try { windowManager.addView(overlay, windowParams); }
-        catch (Exception e) {
+        try {
+            panel.setAlpha(0f);
+            panel.setScaleX(.94f);
+            panel.setScaleY(.94f);
+            windowManager.addView(overlay, windowParams);
+            panel.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(150).start();
+        } catch (Exception e) {
             overlay = null;
             Toast.makeText(this, "Unable to display taskbar", Toast.LENGTH_SHORT).show();
         }
+    }
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+    private void hideBar() {
+        expanded = false;
+        manuallyHidden = true;
+        phoneControls = false;
+        render();
+        startForegroundNow();
+    }
+    private void collapseBar() {
+        expanded = false;
+        manuallyHidden = false;
+        phoneControls = false;
+        render();
+        startForegroundNow();
+    }
+    private void showBar() {
+        expanded = true;
+        manuallyHidden = false;
+        phoneControls = false;
+        render();
+        startForegroundNow();
+    }
+    private void attachFreeDrag(View handle, boolean bubble) {
+        handle.setOnTouchListener(new View.OnTouchListener() {
+            private float rawX, rawY;
+            private int originX, originY;
+            private boolean moved;
+            @Override public boolean onTouch(View view, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        rawX = event.getRawX(); rawY = event.getRawY();
+                        originX = windowParams == null ? 0 : windowParams.x;
+                        originY = windowParams == null ? 0 : windowParams.y;
+                        moved = false;
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        float dx = event.getRawX() - rawX;
+                        float dy = event.getRawY() - rawY;
+                        if (Math.abs(dx) > Ui.dp(OverlayService.this, 7) ||
+                                Math.abs(dy) > Ui.dp(OverlayService.this, 7)) moved = true;
+                        if (moved && windowParams != null && overlay != null) {
+                            int screenH = getResources().getDisplayMetrics().heightPixels;
+                            int sizeW = Ui.dp(OverlayService.this,
+                                    bubble ? Prefs.bubbleSize(OverlayService.this) + 10 : 121);
+                            int sizeH = Ui.dp(OverlayService.this, bubble ? Prefs.bubbleSize(OverlayService.this) + 10 : 58);
+                            windowParams.x = clamp(originX + Math.round(dx),
+                                    0, Math.max(0, screenWidth() - sizeW));
+                            windowParams.y = clamp(originY + Math.round(dy), Ui.dp(OverlayService.this, 24),
+                                    Math.max(Ui.dp(OverlayService.this, 24), screenH - sizeH - Ui.dp(OverlayService.this, 35)));
+                            try { windowManager.updateViewLayout(overlay, windowParams); }
+                            catch (IllegalArgumentException ignored) { }
+                        }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        if (moved && windowParams != null) {
+                            if (bubble) {
+                                int diameter = Ui.dp(OverlayService.this, Prefs.bubbleSize(OverlayService.this) + 10);
+                                int edgeX = windowParams.x < screenWidth() / 2
+                                        ? Ui.dp(OverlayService.this, 6)
+                                        : Math.max(0, screenWidth() - diameter - Ui.dp(OverlayService.this, 6));
+                                final int y = windowParams.y;
+                                ValueAnimator snap = ValueAnimator.ofInt(windowParams.x, edgeX);
+                                snap.setDuration(170);
+                                snap.addUpdateListener(a -> {
+                                    if (windowParams != null && overlay != null) {
+                                        windowParams.x = (Integer)a.getAnimatedValue();
+                                        try { windowManager.updateViewLayout(overlay, windowParams); }
+                                        catch (IllegalArgumentException ignored) { }
+                                    }
+                                });
+                                snap.addListener(new android.animation.AnimatorListenerAdapter() {
+                                    @Override public void onAnimationEnd(android.animation.Animator animation) {
+                                        Prefs.setBubblePosition(OverlayService.this, edgeX, y);
+                                    }
+                                });
+                                snap.start();
+                            } else Prefs.setMiniPosition(OverlayService.this, windowParams.x, windowParams.y);
+                        } else view.performClick();
+                        return true;
+                    case MotionEvent.ACTION_CANCEL:
+                        if (moved && windowParams != null) {
+                            if (bubble) Prefs.setBubblePosition(OverlayService.this, windowParams.x, windowParams.y);
+                            else Prefs.setMiniPosition(OverlayService.this, windowParams.x, windowParams.y);
+                        }
+                        return true;
+                    default: return false;
+                }
+            }
+        });
+    }
+    private void buildBubbleHandle(LinearLayout panel) {
+        TextView handle = Ui.text(this, "◈", 30, Ui.ACCENT, true);
+        handle.setGravity(Gravity.CENTER);
+        handle.setContentDescription("Move OrbitBar bubble by dragging; tap to open launcher");
+        int size = Ui.dp(this, Prefs.bubbleSize(this));
+        GradientDrawable circle = Ui.shape(0xFF354266, 90, this);
+        circle.setStroke(Ui.dp(this, 1), Ui.ACCENT);
+        handle.setBackground(circle);
+        handle.setOnClickListener(v -> showBar());
+        attachFreeDrag(handle, true);
+        panel.addView(handle, new LinearLayout.LayoutParams(size, size));
     }
     private int screenWidth() { return getResources().getDisplayMetrics().widthPixels; }
     private TextView button(String label, Runnable action) {
@@ -180,13 +333,16 @@ public class OverlayService extends Service {
     private void buildMiniHandle(LinearLayout panel, boolean dot) {
         TextView handle = Ui.text(this, dot ? "◈" : "◈   OrbitBar", dot ? 23 : 13, Ui.ACCENT, true);
         handle.setGravity(Gravity.CENTER);
-        handle.setContentDescription("Open OrbitBar");
-        handle.setOnClickListener(v -> {
-            expanded = true;
-            manuallyHidden = false;
-            phoneControls = false;
-            render();
+        handle.setContentDescription("Drag to move; tap to expand; long press to hide completely");
+        handle.setOnClickListener(v -> showBar());
+        handle.setOnLongClickListener(v -> {
+            manuallyHidden = true;
+            Prefs.setHideStyle(this, "off");
+            hideBar();
+            Toast.makeText(this, "OrbitBar hidden. Reopen from the notification or app.", Toast.LENGTH_LONG).show();
+            return true;
         });
+        attachFreeDrag(handle, false);
         panel.addView(handle, new LinearLayout.LayoutParams(
                 Ui.dp(this, dot ? 44 : 105), Ui.dp(this, 43)));
     }
@@ -194,12 +350,7 @@ public class OverlayService extends Service {
         TextView icon = Ui.text(this, "◈", 26, Ui.ACCENT, true);
         icon.setGravity(Gravity.CENTER);
         icon.setContentDescription("Tap to open OrbitBar; drag vertically to move it");
-        icon.setOnClickListener(v -> {
-            expanded = true;
-            manuallyHidden = false;
-            phoneControls = false;
-            render();
-        });
+        icon.setOnClickListener(v -> showBar());
         icon.setOnTouchListener(new View.OnTouchListener() {
             private float startRawY;
             private int startOffset;
@@ -263,12 +414,7 @@ public class OverlayService extends Service {
         row.addView(button("☰", () -> { expanded = true; render(); }),
                 new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 43)));
         Ui.hgap(row, this, 4);
-        row.addView(button("Hide", () -> {
-            expanded = false;
-            manuallyHidden = true;
-            phoneControls = false;
-            render();
-        }), new LinearLayout.LayoutParams(Ui.dp(this, 50), Ui.dp(this, 43)));
+        row.addView(button("Hide", this::hideBar), new LinearLayout.LayoutParams(Ui.dp(this, 50), Ui.dp(this, 43)));
         panel.addView(row);
     }
     private void addIcon(LinearLayout row, AppRepository.Entry e, boolean compact) {
@@ -294,19 +440,9 @@ public class OverlayService extends Service {
         header.addView(logo, new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1));
         header.addView(button("⚙", this::openSettings));
         Ui.hgap(header, this, 5);
-        header.addView(button("Hide", () -> {
-            expanded = false;
-            manuallyHidden = true;
-            phoneControls = false;
-            render();
-        }));
+        header.addView(button("Hide", this::hideBar));
         Ui.hgap(header, this, 5);
-        header.addView(button("▾", () -> {
-            expanded = false;
-            manuallyHidden = false;
-            phoneControls = false;
-            render();
-        }));
+        header.addView(button("▾", this::collapseBar));
         panel.addView(header);
         Ui.gap(panel, this, 8);
         if (phoneControls) {
@@ -314,8 +450,8 @@ public class OverlayService extends Service {
             return;
         }
         LinearLayout modes = Ui.horizontal(this);
-        for (String m : new String[]{"dock", "taskbar", "edge"}) {
-            String label = m.equals("dock") ? "Dock" : m.equals("taskbar") ? "Taskbar" : "Edge";
+        for (String m : new String[]{"dock", "taskbar", "edge", "bubble"}) {
+            String label = m.equals("dock") ? "Dock" : m.equals("taskbar") ? "Taskbar" : m.equals("edge") ? "Edge" : "Bubble";
             TextView v = button(label, () -> { Prefs.setMode(this, m); render(); });
             if (Prefs.mode(this).equals(m)) v.setBackground(Ui.shape(0xFF4B5C9D, 12, this));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(this, 38), 1);
@@ -336,7 +472,9 @@ public class OverlayService extends Service {
         }
         panel.addView(launchModes);
         Ui.gap(panel, this, 7);
-        panel.addView(Ui.text(this, "Choose how the next app opens (device-dependent).", 11, Ui.MUTED, false));
+        panel.addView(Ui.text(this,
+                "Bubble is OrbitBar's floating launcher. Other apps launch normally or use Float where Android permits.",
+                11, Ui.MUTED, false));
         Ui.gap(panel, this, 10);
 
         EditText search = new EditText(this);

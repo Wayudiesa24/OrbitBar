@@ -1,4 +1,12 @@
-# OrbitBar V0.2 — Hybrid Android Taskbar
+# OrbitBar V0.3 — Hybrid Android Taskbar
+
+**V0.3 update** (Pixel-friendly):
+- Fourth **Bubble** layout: a draggable floating OrbitBar launcher bubble that snaps to the nearest screen edge; tap to expand the launcher, search, media, and quick phone controls. Adjustable 48–76dp diameter.
+- **Slim pill and dot now drag anywhere on the screen**; positions persist across app restarts. Long-press a mini handle to fully hide OrbitBar.
+- New **Fully hidden** hide style removes OrbitBar's overlay entirely. Use **Show** in the ongoing notification or **Start / Show OrbitBar** inside the app to restore it. The foreground service continues until you choose Stop.
+- Adjustable 40–100% taskbar background opacity. Subtle 150ms panel appearance animation and bubble edge-snap.
+- Pixel caveat: this bubble belongs to OrbitBar itself. Android notification bubbles and freeform windows do not give ordinary apps permission to embed arbitrary third-party apps inside a bubble. **Float** remains a best-effort system launch for supported devices.
+
 
 **V0.2 update:** Tap **Hide** on the collapsed dock/taskbar or expanded panel to shrink OrbitBar to a **Slim pill**, **Small dot**, or **Side tab**. Choose your preferred hide style from the app settings; tapping the handle reopens the panel. **▾** collapses back to the full taskbar. This update also adds a dedicated **More phone controls** screen: Internet, Bluetooth, Display, Sound, Rotation, Do Not Disturb, Battery saver, Location, Night light, NFC, and direct media volume down/mute/up. Settings shortcuts are not direct system toggles; availability depends on the phone. The side tab remains draggable, with its position remembered.
 

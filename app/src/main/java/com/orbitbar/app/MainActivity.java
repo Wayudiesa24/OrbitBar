@@ -18,6 +18,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.util.ArrayList;
@@ -67,7 +68,7 @@ public class MainActivity extends Activity {
     private void showHome() {
         showingPicker = false;
         shell();
-        TextView eyebrow = Ui.text(this, "ORBIT SYSTEMS  /  V1", 11, Ui.ACCENT, true);
+        TextView eyebrow = Ui.text(this, "ORBIT SYSTEMS  /  V0.3", 11, Ui.ACCENT, true);
         content.addView(eyebrow); Ui.gap(content, this, 8);
         content.addView(Ui.text(this, "OrbitBar", 34, Ui.TEXT, true));
         Ui.gap(content, this, 4);
@@ -79,10 +80,15 @@ public class MainActivity extends Activity {
         addButton(modes, modeName("dock"), () -> selectMode("dock"));
         addButton(modes, modeName("taskbar"), () -> selectMode("taskbar"));
         addButton(modes, modeName("edge"), () -> selectMode("edge"));
+        addButton(modes, modeName("bubble"), () -> selectMode("bubble"));
         content.addView(modes);
         Ui.gap(content, this, 11);
         TextView chosen = Ui.text(this, "Selected: " + modeName(Prefs.mode(this)), 13, Ui.ACCENT, true);
         content.addView(chosen);
+        Ui.gap(content, this, 10);
+        content.addView(Ui.text(this,
+                "Bubble mode is OrbitBar's own movable overlay. Other apps open normally, " +
+                "or try Float on devices with supported freeform windows.", 12, Ui.MUTED, false));
         Ui.gap(content, this, 24);
 
         section("When you hide the bar", "Tap Hide on the taskbar to tuck it into a small handle. Tap the handle to open it again.");
@@ -91,10 +97,53 @@ public class MainActivity extends Activity {
         addButton(hideChoices, "Small dot", () -> selectHideStyle("dot"));
         addButton(hideChoices, "Side tab", () -> selectHideStyle("side"));
         content.addView(hideChoices);
+        Ui.gap(content, this, 7);
+        content.addView(Ui.pill(this, "◌  Fully hidden — no floating handle", () -> selectHideStyle("off")));
         Ui.gap(content, this, 9);
         String hide = Prefs.hideStyle(this);
-        String hideLabel = hide.equals("dot") ? "Small dot" : hide.equals("side") ? "Side tab" : "Slim pill";
+        String hideLabel = hide.equals("off") ? "Fully hidden" :
+                hide.equals("dot") ? "Small dot" : hide.equals("side") ? "Side tab" : "Slim pill";
         content.addView(Ui.text(this, "Selected hide style: " + hideLabel, 13, Ui.ACCENT, true));
+        Ui.gap(content, this, 7);
+        content.addView(Ui.text(this,
+                "The slim pill can also be dragged. Long-press it to hide completely. " +
+                "Restore OrbitBar from its notification or the Show button below.", 12, Ui.MUTED, false));
+        Ui.gap(content, this, 22);
+
+        section("Appearance", "Choose a comfortable bubble size and taskbar transparency.");
+        TextView opacity = Ui.text(this, "Background opacity: " + Prefs.opacity(this) + "%", 13, Ui.TEXT, true);
+        content.addView(opacity);
+        SeekBar alphaSeek = new SeekBar(this);
+        alphaSeek.setMax(100);
+        alphaSeek.setProgress(Prefs.opacity(this));
+        alphaSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onStartTrackingTouch(SeekBar v) {}
+            public void onStopTrackingTouch(SeekBar v) {
+                Prefs.setOpacity(MainActivity.this, Math.max(40, v.getProgress()));
+                refreshOverlay();
+            }
+            public void onProgressChanged(SeekBar v, int progress, boolean fromUser) {
+                opacity.setText("Background opacity: " + Math.max(40, progress) + "%");
+            }
+        });
+        content.addView(alphaSeek);
+        Ui.gap(content, this, 7);
+        TextView bubbleSize = Ui.text(this, "Bubble diameter: " + Prefs.bubbleSize(this) + " dp", 13, Ui.TEXT, true);
+        content.addView(bubbleSize);
+        SeekBar bubbleSeek = new SeekBar(this);
+        bubbleSeek.setMax(76);
+        bubbleSeek.setProgress(Prefs.bubbleSize(this));
+        bubbleSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onStartTrackingTouch(SeekBar v) {}
+            public void onStopTrackingTouch(SeekBar v) {
+                Prefs.setBubbleSize(MainActivity.this, Math.max(48, v.getProgress()));
+                refreshOverlay();
+            }
+            public void onProgressChanged(SeekBar v, int progress, boolean fromUser) {
+                bubbleSize.setText("Bubble diameter: " + Math.max(48, progress) + " dp");
+            }
+        });
+        content.addView(bubbleSeek);
         Ui.gap(content, this, 24);
 
         section("Your pinned apps", "Pick which apps appear on the taskbar. Long-press an icon on the overlay to pin or unpin.");
@@ -137,14 +186,14 @@ public class MainActivity extends Activity {
                     () -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 75));
         }
         Ui.gap(content, this, 22);
-        TextView start = Ui.pill(this, "▶   Start OrbitBar", () -> {
+        TextView start = Ui.pill(this, "▶   Start / Show OrbitBar", () -> {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "Grant overlay permission first", Toast.LENGTH_LONG).show();
                 startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:" + getPackageName())));
                 return;
             }
-            Intent i = new Intent(this, OverlayService.class);
+            Intent i = new Intent(this, OverlayService.class).setAction(OverlayService.ACTION_SHOW);
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
             else startService(i);
             Toast.makeText(this, "OrbitBar started", Toast.LENGTH_SHORT).show();
@@ -169,25 +218,25 @@ public class MainActivity extends Activity {
         switch (mode) {
             case "taskbar": return "Taskbar";
             case "edge": return "EdgeBar";
+            case "bubble": return "Bubble";
             default: return "Dock";
+        }
+    }
+    private void refreshOverlay() {
+        if (OverlayService.isRunning && Settings.canDrawOverlays(this)) {
+            Intent refresh = new Intent(this, OverlayService.class).setAction(OverlayService.ACTION_REFRESH);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(refresh);
+            else startService(refresh);
         }
     }
     private void selectMode(String mode) {
         Prefs.setMode(this, mode);
-        if (OverlayService.isRunning && Settings.canDrawOverlays(this)) {
-            Intent refresh = new Intent(this, OverlayService.class).setAction(OverlayService.ACTION_REFRESH);
-            if (Build.VERSION.SDK_INT >= 26) startForegroundService(refresh);
-            else startService(refresh);
-        }
+        refreshOverlay();
         showHome();
     }
     private void selectHideStyle(String style) {
         Prefs.setHideStyle(this, style);
-        if (OverlayService.isRunning && Settings.canDrawOverlays(this)) {
-            Intent refresh = new Intent(this, OverlayService.class).setAction(OverlayService.ACTION_REFRESH);
-            if (Build.VERSION.SDK_INT >= 26) startForegroundService(refresh);
-            else startService(refresh);
-        }
+        refreshOverlay();
         showHome();
     }
     private void permissionRow(String name, boolean granted, Runnable action) {

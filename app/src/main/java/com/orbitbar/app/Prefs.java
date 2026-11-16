@@ -16,6 +16,16 @@ final class Prefs {
     static void setMode(Context c, String mode) { p(c).edit().putString("mode", mode).apply(); }
     static String hideStyle(Context c) { return p(c).getString("hideStyle", "pill"); }
     static void setHideStyle(Context c, String style) { p(c).edit().putString("hideStyle", style).apply(); }
+    static int opacity(Context c) { return p(c).getInt("opacity", 93); }
+    static void setOpacity(Context c, int pct) { p(c).edit().putInt("opacity", Math.max(40, Math.min(100, pct))).apply(); }
+    static int bubbleSize(Context c) { return p(c).getInt("bubbleSize", 58); }
+    static void setBubbleSize(Context c, int dp) { p(c).edit().putInt("bubbleSize", Math.max(48, Math.min(76, dp))).apply(); }
+    static int bubbleX(Context c) { return p(c).getInt("bubbleX", -1); }
+    static int bubbleY(Context c) { return p(c).getInt("bubbleY", -1); }
+    static void setBubblePosition(Context c, int x, int y) { p(c).edit().putInt("bubbleX", x).putInt("bubbleY", y).apply(); }
+    static int miniX(Context c) { return p(c).getInt("miniX", -1); }
+    static int miniY(Context c) { return p(c).getInt("miniY", -1); }
+    static void setMiniPosition(Context c, int x, int y) { p(c).edit().putInt("miniX", x).putInt("miniY", y).apply(); }
     static String launchMode(Context c) { return p(c).getString("launchMode", "normal"); }
     static void setLaunchMode(Context c, String mode) { p(c).edit().putString("launchMode", mode).apply(); }
     static List<String> pins(Context c) { return decode(p(c).getString("pins", "")); }
