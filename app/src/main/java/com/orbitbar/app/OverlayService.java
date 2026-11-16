@@ -163,8 +163,11 @@ public class OverlayService extends Service {
                 : (Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
         if (!expanded) flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        int displayHeight = getResources().getDisplayMetrics().heightPixels;
+        int expandedHeight = Math.max(Ui.dp(this, 300),
+                Math.min(displayHeight - Ui.dp(this, 110), Ui.dp(this, 720)));
         windowParams = new WindowManager.LayoutParams(width,
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                expanded ? expandedHeight : WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 flags, PixelFormat.TRANSLUCENT);
         windowParams.gravity = gravity;
@@ -202,7 +205,16 @@ public class OverlayService extends Service {
         bg.setStroke(Ui.dp(this, 1), 0xFF3F4C70);
         panel.setBackground(bg);
         panel.setElevation(Ui.dp(this, 12));
-        if (expanded) buildExpanded(panel);
+        if (expanded) {
+            // V0.6 adds more launch controls: keep everything accessible on shorter phones.
+            ScrollView contentScroll = new ScrollView(this);
+            contentScroll.setFillViewport(false);
+            contentScroll.setVerticalScrollBarEnabled(false);
+            LinearLayout expandedBody = Ui.vertical(this);
+            contentScroll.addView(expandedBody);
+            panel.addView(contentScroll, new LinearLayout.LayoutParams(-1, 0, 1));
+            buildExpanded(expandedBody);
+        }
         else if (freeBubble) buildBubbleHandle(panel);
         else if (sideHandle) buildEdgeHandle(panel);
         else if (manuallyHidden) buildMiniHandle(panel, hideStyle.equals("dot"));
