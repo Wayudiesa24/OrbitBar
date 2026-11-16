@@ -1,4 +1,13 @@
-# OrbitBar V0.3 — Hybrid Android Taskbar
+# OrbitBar V0.4 — Hybrid Android Taskbar
+
+**V0.4: Reuse Orbit-AI-Launcher freeform and Orbit bubble integration**
+
+In the expanded taskbar choose **Pixel Float** to request native Android freeform windowing mode 5 using the HiddenApiBypass-based launcher technique already implemented in `Wayudiesa24/Orbit-AI-Launcher`. This goes through `PixelFreeformActivity` because OrbitBar itself runs as a service. It will only work if the Android firmware supports freeform on the active display; even if the launch request succeeds, the system may still open fullscreen.
+
+Choose **Bubble in Orbit companion app** to send the selected package name through the documented integration in the user's earlier Orbit-AI-Launcher project to the optional `co.bubbles` companion's exported `MainActivity`, using the `co.bubbles.extra.PENDING_LAUNCH` extra. This requires the companion installed and working; OrbitBar cannot create third-party app windows by itself. The original OrbitBar floating **Bubble** layout remains separate, as a draggable launcher overlay.
+
+The freeform launch algorithm is adapted from the user's earlier Orbit-AI-Launcher project's Smart Edge-inspired implementation, itself inspired by MIT-licensed Smart Edge (copyright (c) 2024 Imtiaz); see `SMART-EDGE-LICENSE.txt`. Hidden API behavior may break on future Android versions. This build is for personal testing.
+
 
 **V0.3 update** (Pixel-friendly):
 - Fourth **Bubble** layout: a draggable floating OrbitBar launcher bubble that snaps to the nearest screen edge; tap to expand the launcher, search, media, and quick phone controls. Adjustable 48–76dp diameter.

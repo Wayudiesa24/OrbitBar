@@ -465,7 +465,7 @@ public class OverlayService extends Service {
 
         LinearLayout launchModes = Ui.horizontal(this);
         for (String m : new String[]{"normal", "split", "float"}) {
-            String label = m.equals("normal") ? "Open" : m.equals("split") ? "Split" : "Float";
+            String label = m.equals("normal") ? "Open" : m.equals("split") ? "Split" : "Pixel Float";
             TextView b = button(label, () -> { Prefs.setLaunchMode(this, m); render(); });
             if (Prefs.launchMode(this).equals(m)) b.setBackground(Ui.shape(0xFF4B5C9D, 12, this));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(this, 35), 1);
@@ -473,9 +473,20 @@ public class OverlayService extends Service {
             launchModes.addView(b, lp);
         }
         panel.addView(launchModes);
+        Ui.gap(panel, this, 6);
+        TextView orbitMode = button("◉  Bubble in Orbit companion app", () -> {
+            Prefs.setLaunchMode(this, "orbit");
+            render();
+        });
+        if ("orbit".equals(Prefs.launchMode(this))) {
+            orbitMode.setBackground(Ui.shape(0xFF4B5C9D, 12, this));
+        }
+        panel.addView(orbitMode, new LinearLayout.LayoutParams(-1, Ui.dp(this, 39)));
         Ui.gap(panel, this, 7);
         panel.addView(Ui.text(this,
-                "Bubble is OrbitBar's floating launcher. Other apps launch normally or use Float where Android permits.",
+                "Pixel Float requests a real freeform app window (developer options required). " +
+                "Bubble in Orbit passes the app to your installed Orbit bubble host. " +
+                "Neither is guaranteed by Android.",
                 11, Ui.MUTED, false));
         Ui.gap(panel, this, 10);
 
@@ -692,14 +703,17 @@ public class OverlayService extends Service {
                 intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
                 startActivity(intent);
             } else if ("float".equals(mode) && Build.VERSION.SDK_INT >= 26) {
-                // Launch bounds only take effect in compatible desktop/freeform modes.
-                ActivityOptions options = ActivityOptions.makeBasic();
-                int width = screenWidth();
-                int h = getResources().getDisplayMetrics().heightPixels;
-                options.setLaunchBounds(new Rect(Ui.dp(this, 28), Ui.dp(this, 70),
-                        Math.max(Ui.dp(this, 280), width - Ui.dp(this, 28)),
-                        Math.max(Ui.dp(this, 400), (int)(h * .78f))));
-                startActivity(intent, options.toBundle());
+                // Launch through a real Activity, as in Orbit-AI-Launcher.
+                Intent request = new Intent(this, PixelFreeformActivity.class);
+                request.putExtra(PixelFreeformActivity.EXTRA_PACKAGE, e.pkg);
+                request.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(request);
+            } else if ("orbit".equals(mode)) {
+                String error = OrbitBubbleBridge.launch(this, e.pkg);
+                if (error != null) {
+                    Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+                    return;
+                }
             } else startActivity(intent);
             Prefs.recordLaunch(this, e.pkg);
             expanded = false;
