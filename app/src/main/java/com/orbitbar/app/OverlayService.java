@@ -483,14 +483,18 @@ public class OverlayService extends Service {
         }
         panel.addView(orbitMode, new LinearLayout.LayoutParams(-1, Ui.dp(this, 39)));
         Ui.gap(panel, this, 7);
+        if (Prefs.pairReady(this)) {
+            panel.addView(button("◧  Launch two-app workspace", this::launchWorkspacePair),
+                    new LinearLayout.LayoutParams(-1, Ui.dp(this, 39)));
+            Ui.gap(panel, this, 7);
+        }
         if ("float".equals(Prefs.launchMode(this))) {
             buildFreeformPositionControls(panel);
             Ui.gap(panel, this, 6);
         }
         panel.addView(Ui.text(this,
-                "Pixel Float requests a real freeform app window (developer options required). " +
-                "Bubble in Orbit passes the app to your installed Orbit bubble host. " +
-                "Neither is guaranteed by Android.",
+                "Pixel Float uses your saved app positions. Tap Save beside an app to remember " +
+                "the current size and position. Two-app layouts are configured in settings.",
                 11, Ui.MUTED, false));
         Ui.gap(panel, this, 10);
 
@@ -528,11 +532,7 @@ public class OverlayService extends Service {
         LinearLayout labelRow = Ui.horizontal(this);
         labelRow.addView(Ui.text(this, "FREEFORM START POSITION", 10, Ui.ACCENT, true),
                 new LinearLayout.LayoutParams(0, Ui.dp(this, 34), 1));
-        boolean compact = Prefs.freeformCompact(this);
-        labelRow.addView(button(compact ? "Size: Compact" : "Size: Normal", () -> {
-            Prefs.setFreeformCompact(this, !Prefs.freeformCompact(this));
-            render();
-        }));
+        labelRow.addView(button("Size: " + Prefs.windowSizeMode(this), this::openSettings));
         panel.addView(labelRow);
         LinearLayout choices = Ui.horizontal(this);
         final String[] labels = {"↖", "↗", "⊙", "↙", "↘"};
@@ -556,6 +556,41 @@ public class OverlayService extends Service {
             choices.addView(choice, p);
         }
         panel.addView(choices);
+        Ui.gap(panel, this, 6);
+        LinearLayout sizes = Ui.horizontal(this);
+        for (String size : new String[]{"small","medium","large","custom"}) {
+            final String choice = size;
+            TextView b = button(size.substring(0,1).toUpperCase(Locale.ROOT)
+                    + size.substring(1), () -> {
+                Prefs.setWindowSizeMode(this,choice);
+                if ("custom".equals(choice)) openSettings();
+                else render();
+            });
+            if (Prefs.windowSizeMode(this).equals(choice))
+                b.setBackground(Ui.shape(0xFF4B5C9D, 12, this));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(this, 34), 1);
+            lp.setMargins(0, 0, Ui.dp(this, 4), 0);
+            sizes.addView(b, lp);
+        }
+        panel.addView(sizes);
+    }
+    private void launchWorkspacePair() {
+        if (!Prefs.pairReady(this)) {
+            Toast.makeText(this, "Choose two apps in OrbitBar settings", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent i = new Intent(this, PixelFreeformActivity.class);
+        i.putExtra(PixelFreeformActivity.EXTRA_PACKAGE, Prefs.pairFirst(this));
+        i.putExtra(PixelFreeformActivity.EXTRA_SECOND, Prefs.pairSecond(this));
+        i.putExtra(PixelFreeformActivity.EXTRA_LAYOUT, Prefs.pairLayout(this));
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            startActivity(i);
+            expanded = false;
+            handler.postDelayed(this::render, 160);
+        } catch (Exception e) {
+            Toast.makeText(this, "Unable to launch workspace", Toast.LENGTH_SHORT).show();
+        }
     }
     private void populateResults(LinearLayout results, String query) {
         results.removeAllViews();
@@ -593,7 +628,21 @@ public class OverlayService extends Service {
         TextView name = Ui.text(this, e.label, 13, Ui.TEXT, false);
         name.setMaxLines(1);
         row.addView(name, new LinearLayout.LayoutParams(0, Ui.dp(this, 36), 1));
-        if (Prefs.pins(this).contains(e.pkg)) row.addView(Ui.text(this, "★", 15, Ui.ACCENT, true));
+        if (Prefs.pins(this).contains(e.pkg))
+            row.addView(Ui.text(this, "★", 15, Ui.ACCENT, true));
+        if ("float".equals(Prefs.launchMode(this))) {
+            boolean saved = Prefs.hasPreset(this, e.pkg);
+            TextView save = button(saved ? "Reset" : "Save", () -> {
+                if (Prefs.hasPreset(this,e.pkg)) Prefs.clearPreset(this,e.pkg);
+                else Prefs.savePreset(this,e.pkg);
+                Toast.makeText(this, e.label + (saved ? " preset removed" : " preset saved"),
+                        Toast.LENGTH_SHORT).show();
+                render();
+            });
+            save.setContentDescription(saved ? "Remove window preset for " + e.label
+                    : "Save current window preset for " + e.label);
+            row.addView(save, new LinearLayout.LayoutParams(Ui.dp(this, 57), Ui.dp(this, 33)));
+        }
         row.setOnClickListener(v -> launch(e));
         row.setOnLongClickListener(v -> {
             Prefs.togglePin(this, e.pkg);
