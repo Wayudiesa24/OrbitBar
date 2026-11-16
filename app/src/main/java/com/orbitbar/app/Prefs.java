@@ -14,6 +14,8 @@ final class Prefs {
     static int edgeOffset(Context c) { return p(c).getInt("edgeOffset", 0); }
     static void setEdgeOffset(Context c, int value) { p(c).edit().putInt("edgeOffset", value).apply(); }
     static void setMode(Context c, String mode) { p(c).edit().putString("mode", mode).apply(); }
+    static String hideStyle(Context c) { return p(c).getString("hideStyle", "pill"); }
+    static void setHideStyle(Context c, String style) { p(c).edit().putString("hideStyle", style).apply(); }
     static String launchMode(Context c) { return p(c).getString("launchMode", "normal"); }
     static void setLaunchMode(Context c, String mode) { p(c).edit().putString("launchMode", mode).apply(); }
     static List<String> pins(Context c) { return decode(p(c).getString("pins", "")); }

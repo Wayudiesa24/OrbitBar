@@ -1,4 +1,7 @@
-# OrbitBar V1.1 — Hybrid Android Taskbar
+# OrbitBar V0.2 — Hybrid Android Taskbar
+
+**V0.2 update:** Tap **Hide** on the collapsed dock/taskbar or expanded panel to shrink OrbitBar to a **Slim pill**, **Small dot**, or **Side tab**. Choose your preferred hide style from the app settings; tapping the handle reopens the panel. **▾** collapses back to the full taskbar. This update also adds a dedicated **More phone controls** screen: Internet, Bluetooth, Display, Sound, Rotation, Do Not Disturb, Battery saver, Location, Night light, NFC, and direct media volume down/mute/up. Settings shortcuts are not direct system toggles; availability depends on the phone. The side tab remains draggable, with its position remembered.
+
 
 **V1.1 update:** The collapsed EdgeBar handle can now be dragged vertically. Its position is remembered even after restarting the taskbar. Tap the handle to expand it as before.
 
@@ -26,8 +29,8 @@ Android 8.0+ (API 26), target Android 15 (API 35). Intended for sideload/persona
 
 1. Create a new GitHub repository called `OrbitBar`.
 2. Upload the **contents of this project folder** so `app/`, `build.gradle`, and `.github/` are at repository root. The `.github` directory may be hidden in Android file pickers; uploading/extracting via GitHub's browser editor or Git on a computer may be easier.
-3. Go to **Actions → OrbitBar Android Debug APK → Run workflow**, or push to the `main` branch to trigger an automatic build.
-4. When the workflow succeeds, open its run, scroll to **Artifacts**, and select `OrbitBar-v1-debug-apk`.
+3. Go to **Actions → Build OrbitBar APK → Run workflow**, or push to the `main` branch to trigger an automatic build.
+4. When the workflow succeeds, open its run, scroll to **Artifacts**, and select `OrbitBar-debug-APK`.
 5. Unzip the downloaded artifact and install `app-debug.apk` on your Android phone, after allowing installs from your browser/files app.
 
 The GitHub workflow provisions JDK 17, Android SDK 35 and Gradle 8.9, then runs `gradle assembleDebug`. If you do have Android Studio, import the project folder and run the `app` configuration instead.
@@ -62,7 +65,7 @@ No network permission is requested. There is no server, account login, telemetry
 - `MediaHelper.java`, `MediaListenerService.java`: optional active media sessions
 - `Prefs.java`: local persistent settings and pins
 - `Ui.java`: reusable design primitives
-- `.github/workflows/android-debug.yml`: GitHub Actions APK build
+- `.github/workflows/main.yml`: GitHub Actions APK build
 
 ## Planned follow-up versions
 

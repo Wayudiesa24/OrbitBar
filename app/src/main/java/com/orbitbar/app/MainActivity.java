@@ -85,6 +85,18 @@ public class MainActivity extends Activity {
         content.addView(chosen);
         Ui.gap(content, this, 24);
 
+        section("When you hide the bar", "Tap Hide on the taskbar to tuck it into a small handle. Tap the handle to open it again.");
+        LinearLayout hideChoices = Ui.horizontal(this);
+        addButton(hideChoices, "Slim pill", () -> selectHideStyle("pill"));
+        addButton(hideChoices, "Small dot", () -> selectHideStyle("dot"));
+        addButton(hideChoices, "Side tab", () -> selectHideStyle("side"));
+        content.addView(hideChoices);
+        Ui.gap(content, this, 9);
+        String hide = Prefs.hideStyle(this);
+        String hideLabel = hide.equals("dot") ? "Small dot" : hide.equals("side") ? "Side tab" : "Slim pill";
+        content.addView(Ui.text(this, "Selected hide style: " + hideLabel, 13, Ui.ACCENT, true));
+        Ui.gap(content, this, 24);
+
         section("Your pinned apps", "Pick which apps appear on the taskbar. Long-press an icon on the overlay to pin or unpin.");
         HorizontalScrollView pinnedScroll = new HorizontalScrollView(this);
         pinnedScroll.setHorizontalScrollBarEnabled(false);
@@ -162,6 +174,15 @@ public class MainActivity extends Activity {
     }
     private void selectMode(String mode) {
         Prefs.setMode(this, mode);
+        if (OverlayService.isRunning && Settings.canDrawOverlays(this)) {
+            Intent refresh = new Intent(this, OverlayService.class).setAction(OverlayService.ACTION_REFRESH);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(refresh);
+            else startService(refresh);
+        }
+        showHome();
+    }
+    private void selectHideStyle(String style) {
+        Prefs.setHideStyle(this, style);
         if (OverlayService.isRunning && Settings.canDrawOverlays(this)) {
             Intent refresh = new Intent(this, OverlayService.class).setAction(OverlayService.ACTION_REFRESH);
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(refresh);

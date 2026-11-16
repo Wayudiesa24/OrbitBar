@@ -48,6 +48,8 @@ public class OverlayService extends Service {
     private WindowManager.LayoutParams windowParams;
     private View overlay;
     private boolean expanded = false;
+    private boolean manuallyHidden = false;
+    private boolean phoneControls = false;
     private List<AppRepository.Entry> apps = new ArrayList<>();
     private TextView mediaText, playButton;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -126,13 +128,16 @@ public class OverlayService extends Service {
         removeOverlay();
         if (!Settings.canDrawOverlays(this)) return;
         String mode = Prefs.mode(this);
+        String hideStyle = Prefs.hideStyle(this);
         boolean edge = mode.equals("edge");
-        int width = expanded ? (edge ? Math.min(screenWidth() - Ui.dp(this, 20), Ui.dp(this, 326))
+        boolean sideHandle = !expanded && (manuallyHidden ? hideStyle.equals("side") : edge);
+        boolean sideAnchor = expanded ? edge : sideHandle;
+        int width = expanded ? (sideAnchor ? Math.min(screenWidth() - Ui.dp(this, 20), Ui.dp(this, 326))
                         : Math.min(screenWidth() - Ui.dp(this, 20), Ui.dp(this, 510)))
+                : (manuallyHidden || edge) ? WindowManager.LayoutParams.WRAP_CONTENT
                 : mode.equals("taskbar") ? WindowManager.LayoutParams.MATCH_PARENT
-                : edge ? WindowManager.LayoutParams.WRAP_CONTENT
                 : Math.min(screenWidth() - Ui.dp(this, 20), Ui.dp(this, 368));
-        int gravity = edge ? (Gravity.END | Gravity.CENTER_VERTICAL)
+        int gravity = sideAnchor ? (Gravity.END | Gravity.CENTER_VERTICAL)
                 : (Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
         if (!expanded) flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
@@ -142,8 +147,8 @@ public class OverlayService extends Service {
                 flags, PixelFormat.TRANSLUCENT);
         windowParams.gravity = gravity;
         int edgeLimit = Math.max(0, getResources().getDisplayMetrics().heightPixels / 2 - Ui.dp(this, 68));
-        windowParams.y = edge ? Math.max(-edgeLimit, Math.min(edgeLimit, Prefs.edgeOffset(this))) : Ui.dp(this, 24);
-        windowParams.x = edge ? Ui.dp(this, 4) : 0;
+        windowParams.y = sideAnchor ? Math.max(-edgeLimit, Math.min(edgeLimit, Prefs.edgeOffset(this))) : Ui.dp(this, 24);
+        windowParams.x = sideAnchor ? Ui.dp(this, 4) : 0;
         windowParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
         windowParams.setTitle("OrbitBar taskbar");
 
@@ -155,7 +160,8 @@ public class OverlayService extends Service {
         panel.setBackground(bg);
         panel.setElevation(Ui.dp(this, 12));
         if (expanded) buildExpanded(panel);
-        else if (edge) buildEdgeHandle(panel);
+        else if (sideHandle) buildEdgeHandle(panel);
+        else if (manuallyHidden) buildMiniHandle(panel, hideStyle.equals("dot"));
         else buildCollapsed(panel, mode.equals("taskbar"));
         overlay = panel;
         try { windowManager.addView(overlay, windowParams); }
@@ -171,11 +177,29 @@ public class OverlayService extends Service {
         v.setPadding(Ui.dp(this, 11), Ui.dp(this, 9), Ui.dp(this, 11), Ui.dp(this, 9));
         return v;
     }
+    private void buildMiniHandle(LinearLayout panel, boolean dot) {
+        TextView handle = Ui.text(this, dot ? "◈" : "◈   OrbitBar", dot ? 23 : 13, Ui.ACCENT, true);
+        handle.setGravity(Gravity.CENTER);
+        handle.setContentDescription("Open OrbitBar");
+        handle.setOnClickListener(v -> {
+            expanded = true;
+            manuallyHidden = false;
+            phoneControls = false;
+            render();
+        });
+        panel.addView(handle, new LinearLayout.LayoutParams(
+                Ui.dp(this, dot ? 44 : 105), Ui.dp(this, 43)));
+    }
     private void buildEdgeHandle(LinearLayout panel) {
         TextView icon = Ui.text(this, "◈", 26, Ui.ACCENT, true);
         icon.setGravity(Gravity.CENTER);
         icon.setContentDescription("Tap to open OrbitBar; drag vertically to move it");
-        icon.setOnClickListener(v -> { expanded = true; render(); });
+        icon.setOnClickListener(v -> {
+            expanded = true;
+            manuallyHidden = false;
+            phoneControls = false;
+            render();
+        });
         icon.setOnTouchListener(new View.OnTouchListener() {
             private float startRawY;
             private int startOffset;
@@ -238,6 +262,13 @@ public class OverlayService extends Service {
         Ui.hgap(row, this, 4);
         row.addView(button("☰", () -> { expanded = true; render(); }),
                 new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 43)));
+        Ui.hgap(row, this, 4);
+        row.addView(button("Hide", () -> {
+            expanded = false;
+            manuallyHidden = true;
+            phoneControls = false;
+            render();
+        }), new LinearLayout.LayoutParams(Ui.dp(this, 50), Ui.dp(this, 43)));
         panel.addView(row);
     }
     private void addIcon(LinearLayout row, AppRepository.Entry e, boolean compact) {
@@ -262,10 +293,26 @@ public class OverlayService extends Service {
         TextView logo = Ui.text(this, "◈  OrbitBar", 17, Ui.TEXT, true);
         header.addView(logo, new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1));
         header.addView(button("⚙", this::openSettings));
-        Ui.hgap(header, this, 7);
-        header.addView(button("▾", () -> { expanded = false; render(); }));
+        Ui.hgap(header, this, 5);
+        header.addView(button("Hide", () -> {
+            expanded = false;
+            manuallyHidden = true;
+            phoneControls = false;
+            render();
+        }));
+        Ui.hgap(header, this, 5);
+        header.addView(button("▾", () -> {
+            expanded = false;
+            manuallyHidden = false;
+            phoneControls = false;
+            render();
+        }));
         panel.addView(header);
         Ui.gap(panel, this, 8);
+        if (phoneControls) {
+            buildPhoneControls(panel);
+            return;
+        }
         LinearLayout modes = Ui.horizontal(this);
         for (String m : new String[]{"dock", "taskbar", "edge"}) {
             String label = m.equals("dock") ? "Dock" : m.equals("taskbar") ? "Taskbar" : "Edge";
@@ -412,6 +459,86 @@ public class OverlayService extends Service {
                     AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI);
         }), new LinearLayout.LayoutParams(0, Ui.dp(this, 38), .7f));
         panel.addView(controls);
+        Ui.gap(panel, this, 8);
+        panel.addView(button("⚡  More phone controls   ›", () -> {
+            phoneControls = true;
+            render();
+        }), new LinearLayout.LayoutParams(-1, Ui.dp(this, 38)));
+    }
+    private void addControlPair(LinearLayout panel, String leftLabel, Runnable leftAction,
+                                String rightLabel, Runnable rightAction) {
+        LinearLayout row = Ui.horizontal(this);
+        row.addView(button(leftLabel, leftAction), new LinearLayout.LayoutParams(0, Ui.dp(this, 39), 1));
+        Ui.hgap(row, this, 7);
+        row.addView(button(rightLabel, rightAction), new LinearLayout.LayoutParams(0, Ui.dp(this, 39), 1));
+        panel.addView(row);
+        Ui.gap(panel, this, 7);
+    }
+    private void buildPhoneControls(LinearLayout panel) {
+        panel.addView(button("‹ Back to apps", () -> {
+            phoneControls = false;
+            render();
+        }), new LinearLayout.LayoutParams(-1, Ui.dp(this, 38)));
+        Ui.gap(panel, this, 13);
+        panel.addView(Ui.text(this, "PHONE CONTROLS", 12, Ui.ACCENT, true));
+        Ui.gap(panel, this, 5);
+        panel.addView(Ui.text(this,
+                "Settings buttons open Android's own controls. Volume buttons act immediately.",
+                11, Ui.MUTED, false));
+        Ui.gap(panel, this, 12);
+
+        addControlPair(panel, "◉ Internet", () -> {
+            if (Build.VERSION.SDK_INT >= 29) openSystem(Settings.Panel.ACTION_INTERNET_CONNECTIVITY);
+            else openSystem(Settings.ACTION_WIFI_SETTINGS);
+        }, "ᛒ Bluetooth", () -> openSystem(Settings.ACTION_BLUETOOTH_SETTINGS));
+        addControlPair(panel, "☼ Display", () -> openSystem(Settings.ACTION_DISPLAY_SETTINGS),
+                "♫ Sound", () -> openSystem(Settings.ACTION_SOUND_SETTINGS));
+        addControlPair(panel, "⟳ Rotation", () -> {
+            if (Build.VERSION.SDK_INT >= 31) openSystemWithFallback(
+                    Settings.ACTION_AUTO_ROTATE_SETTINGS, Settings.ACTION_DISPLAY_SETTINGS);
+            else openSystem(Settings.ACTION_DISPLAY_SETTINGS);
+        }, "☾ Do Not Disturb", () -> openSystemWithFallback(
+                "android.settings.ZEN_MODE_SETTINGS", Settings.ACTION_NOTIFICATION_SETTINGS));
+        addControlPair(panel, "▣ Battery saver", () -> openSystemWithFallback(
+                Settings.ACTION_BATTERY_SAVER_SETTINGS, Settings.ACTION_BATTERY_SETTINGS),
+                "⌖ Location", () -> openSystem(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+        addControlPair(panel, "◐ Night light", () -> openSystemWithFallback(
+                Settings.ACTION_NIGHT_DISPLAY_SETTINGS, Settings.ACTION_DISPLAY_SETTINGS),
+                "◈ NFC", () -> openSystemWithFallback(
+                        Settings.ACTION_NFC_SETTINGS, Settings.ACTION_WIRELESS_SETTINGS));
+
+        LinearLayout volume = Ui.horizontal(this);
+        volume.addView(button("Vol −", () -> changeMusicVolume(AudioManager.ADJUST_LOWER)),
+                new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1));
+        Ui.hgap(volume, this, 7);
+        volume.addView(button("Mute", () -> changeMusicVolume(AudioManager.ADJUST_TOGGLE_MUTE)),
+                new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1));
+        Ui.hgap(volume, this, 7);
+        volume.addView(button("Vol +", () -> changeMusicVolume(AudioManager.ADJUST_RAISE)),
+                new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1));
+        panel.addView(volume);
+        Ui.gap(panel, this, 13);
+        addMedia(panel);
+    }
+    private void changeMusicVolume(int direction) {
+        try {
+            AudioManager audio = (AudioManager)getSystemService(AUDIO_SERVICE);
+            if (audio != null) audio.adjustStreamVolume(
+                    AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI);
+        } catch (SecurityException e) {
+            Toast.makeText(this, "Volume control unavailable", Toast.LENGTH_SHORT).show();
+        }
+    }
+    private void openSystemWithFallback(String primary, String fallback) {
+        try {
+            Intent i = new Intent(primary).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            expanded = false;
+            phoneControls = false;
+            render();
+        } catch (Exception ignored) {
+            openSystem(fallback);
+        }
     }
     private void launch(AppRepository.Entry e) {
         Intent intent = getPackageManager().getLaunchIntentForPackage(e.pkg);
@@ -445,14 +572,16 @@ public class OverlayService extends Service {
         try {
             Intent i = new Intent(this, MainActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            startActivity(i); expanded = false; render();
+            startActivity(i); expanded = false; phoneControls = false; render();
         } catch (Exception ignored) { }
     }
     private void openSystem(String action) {
         try {
             Intent i = new Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
-            expanded = false; render();
+            expanded = false;
+            phoneControls = false;
+            render();
         } catch (Exception ex) {
             Toast.makeText(this, "System setting unavailable", Toast.LENGTH_SHORT).show();
         }
