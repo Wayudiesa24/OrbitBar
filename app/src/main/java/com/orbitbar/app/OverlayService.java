@@ -498,9 +498,9 @@ public class OverlayService extends Service {
                     Settings.ACTION_AUTO_ROTATE_SETTINGS, Settings.ACTION_DISPLAY_SETTINGS);
             else openSystem(Settings.ACTION_DISPLAY_SETTINGS);
         }, "☾ Do Not Disturb", () -> openSystemWithFallback(
-                "android.settings.ZEN_MODE_SETTINGS", Settings.ACTION_NOTIFICATION_SETTINGS));
+                "android.settings.ZEN_MODE_SETTINGS", Settings.ACTION_SETTINGS));
         addControlPair(panel, "▣ Battery saver", () -> openSystemWithFallback(
-                Settings.ACTION_BATTERY_SAVER_SETTINGS, Settings.ACTION_BATTERY_SETTINGS),
+                Settings.ACTION_BATTERY_SAVER_SETTINGS, Settings.ACTION_SETTINGS),
                 "⌖ Location", () -> openSystem(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
         addControlPair(panel, "◐ Night light", () -> openSystemWithFallback(
                 Settings.ACTION_NIGHT_DISPLAY_SETTINGS, Settings.ACTION_DISPLAY_SETTINGS),
