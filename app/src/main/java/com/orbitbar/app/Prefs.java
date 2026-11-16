@@ -11,6 +11,8 @@ final class Prefs {
         return c.getSharedPreferences("orbitbar", Context.MODE_PRIVATE);
     }
     static String mode(Context c) { return p(c).getString("mode", "dock"); }
+    static int edgeOffset(Context c) { return p(c).getInt("edgeOffset", 0); }
+    static void setEdgeOffset(Context c, int value) { p(c).edit().putInt("edgeOffset", value).apply(); }
     static void setMode(Context c, String mode) { p(c).edit().putString("mode", mode).apply(); }
     static String launchMode(Context c) { return p(c).getString("launchMode", "normal"); }
     static void setLaunchMode(Context c, String mode) { p(c).edit().putString("launchMode", mode).apply(); }

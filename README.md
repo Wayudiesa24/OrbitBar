@@ -1,4 +1,6 @@
-# OrbitBar V1 — Hybrid Android Taskbar
+# OrbitBar V1.1 — Hybrid Android Taskbar
+
+**V1.1 update:** The collapsed EdgeBar handle can now be dragged vertically. Its position is remembered even after restarting the taskbar. Tap the handle to expand it as before.
 
 A native Android taskbar that runs on top of your existing home screen and applications. Built in Java with Android platform APIs; no third-party UI libraries or analytics.
 

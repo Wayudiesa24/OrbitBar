@@ -22,6 +22,7 @@ import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.EditText;
@@ -140,7 +141,8 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 flags, PixelFormat.TRANSLUCENT);
         windowParams.gravity = gravity;
-        windowParams.y = edge ? 0 : Ui.dp(this, 24);
+        int edgeLimit = Math.max(0, getResources().getDisplayMetrics().heightPixels / 2 - Ui.dp(this, 68));
+        windowParams.y = edge ? Math.max(-edgeLimit, Math.min(edgeLimit, Prefs.edgeOffset(this))) : Ui.dp(this, 24);
         windowParams.x = edge ? Ui.dp(this, 4) : 0;
         windowParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
         windowParams.setTitle("OrbitBar taskbar");
@@ -172,8 +174,43 @@ public class OverlayService extends Service {
     private void buildEdgeHandle(LinearLayout panel) {
         TextView icon = Ui.text(this, "◈", 26, Ui.ACCENT, true);
         icon.setGravity(Gravity.CENTER);
-        icon.setContentDescription("Expand OrbitBar");
+        icon.setContentDescription("Tap to open OrbitBar; drag vertically to move it");
         icon.setOnClickListener(v -> { expanded = true; render(); });
+        icon.setOnTouchListener(new View.OnTouchListener() {
+            private float startRawY;
+            private int startOffset;
+            private boolean dragged;
+            @Override public boolean onTouch(View view, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startRawY = event.getRawY();
+                        startOffset = windowParams == null ? 0 : windowParams.y;
+                        dragged = false;
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        float movement = event.getRawY() - startRawY;
+                        if (Math.abs(movement) > Ui.dp(OverlayService.this, 8)) dragged = true;
+                        if (dragged && overlay != null && windowParams != null) {
+                            int limit = Math.max(0,
+                                    getResources().getDisplayMetrics().heightPixels / 2 -
+                                    Ui.dp(OverlayService.this, 68));
+                            windowParams.y = Math.max(-limit, Math.min(limit, startOffset + Math.round(movement)));
+                            try { windowManager.updateViewLayout(overlay, windowParams); }
+                            catch (IllegalArgumentException ignored) { }
+                        }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        if (dragged && windowParams != null) Prefs.setEdgeOffset(OverlayService.this, windowParams.y);
+                        else view.performClick();
+                        return true;
+                    case MotionEvent.ACTION_CANCEL:
+                        if (dragged && windowParams != null) Prefs.setEdgeOffset(OverlayService.this, windowParams.y);
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+        });
         panel.addView(icon, new LinearLayout.LayoutParams(Ui.dp(this, 43), Ui.dp(this, 55)));
     }
     private void buildCollapsed(LinearLayout panel, boolean taskbar) {
