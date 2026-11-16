@@ -248,10 +248,12 @@ public class OverlayService extends Service {
             private float rawX, rawY;
             private int originX, originY;
             private boolean moved;
+            private long touchedAt;
             @Override public boolean onTouch(View view, MotionEvent event) {
                 switch (event.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         rawX = event.getRawX(); rawY = event.getRawY();
+                        touchedAt = event.getEventTime();
                         originX = windowParams == null ? 0 : windowParams.x;
                         originY = windowParams == null ? 0 : windowParams.y;
                         moved = false;
@@ -298,6 +300,13 @@ public class OverlayService extends Service {
                                 });
                                 snap.start();
                             } else Prefs.setMiniPosition(OverlayService.this, windowParams.x, windowParams.y);
+                        } else if (!bubble && event.getEventTime() - touchedAt >=
+                                android.view.ViewConfiguration.getLongPressTimeout()) {
+                            Prefs.setHideStyle(OverlayService.this, "off");
+                            hideBar();
+                            Toast.makeText(OverlayService.this,
+                                    "OrbitBar hidden. Restore from the notification or app.",
+                                    Toast.LENGTH_LONG).show();
                         } else view.performClick();
                         return true;
                     case MotionEvent.ACTION_CANCEL:
@@ -335,13 +344,6 @@ public class OverlayService extends Service {
         handle.setGravity(Gravity.CENTER);
         handle.setContentDescription("Drag to move; tap to expand; long press to hide completely");
         handle.setOnClickListener(v -> showBar());
-        handle.setOnLongClickListener(v -> {
-            manuallyHidden = true;
-            Prefs.setHideStyle(this, "off");
-            hideBar();
-            Toast.makeText(this, "OrbitBar hidden. Reopen from the notification or app.", Toast.LENGTH_LONG).show();
-            return true;
-        });
         attachFreeDrag(handle, false);
         panel.addView(handle, new LinearLayout.LayoutParams(
                 Ui.dp(this, dot ? 44 : 105), Ui.dp(this, 43)));
