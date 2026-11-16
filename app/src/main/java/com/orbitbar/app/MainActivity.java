@@ -68,7 +68,7 @@ public class MainActivity extends Activity {
     private void showHome() {
         showingPicker = false;
         shell();
-        TextView eyebrow = Ui.text(this, "ORBIT SYSTEMS  /  V0.5", 11, Ui.ACCENT, true);
+        TextView eyebrow = Ui.text(this, "ORBIT SYSTEMS  /  V0.6", 11, Ui.ACCENT, true);
         content.addView(eyebrow); Ui.gap(content, this, 8);
         content.addView(Ui.text(this, "OrbitBar", 34, Ui.TEXT, true));
         Ui.gap(content, this, 4);
@@ -164,13 +164,69 @@ public class MainActivity extends Activity {
         content.addView(Ui.text(this, "Freeform start position: " + positionName,
                 13, Ui.ACCENT, true));
         Ui.gap(content, this, 8);
-        boolean compact = Prefs.freeformCompact(this);
-        content.addView(Ui.pill(this, compact
-                ? "▣ Window size: Compact (tap for Normal)"
-                : "▣ Window size: Normal (tap for Compact)", () -> {
-            Prefs.setFreeformCompact(this, !Prefs.freeformCompact(this));
-            showHome();
-        }));
+        content.addView(Ui.text(this, "Window size: " + Prefs.windowSizeMode(this) +
+                "  (" + Prefs.windowWidth(this) + "% × " + Prefs.windowHeight(this) + "%)",
+                13, Ui.ACCENT, true));
+        Ui.gap(content, this, 8);
+        LinearLayout sizeOptions = Ui.horizontal(this);
+        for (String size : new String[]{"small","medium","large","custom"}) {
+            addButton(sizeOptions, size.substring(0,1).toUpperCase(Locale.ROOT) + size.substring(1),
+                    () -> { Prefs.setWindowSizeMode(this, size); showHome(); });
+        }
+        content.addView(sizeOptions);
+        Ui.gap(content, this, 9);
+        addWindowSlider("Custom width", true);
+        addWindowSlider("Custom height", false);
+        Ui.gap(content, this, 22);
+
+        section("Per-app freeform presets",
+                "Set the default position and size above, then save them to an individual app. " +
+                "Pixel Float will use its saved settings automatically.");
+        content.addView(Ui.pill(this, "★  Save or remove app presets",
+                () -> showConfigurationPicker(true, false)));
+        Ui.gap(content, this, 8);
+        int savedCount = 0;
+        for (AppRepository.Entry entry : apps) {
+            if (!Prefs.hasPreset(this, entry.pkg)) continue;
+            savedCount++;
+            if (savedCount > 6) continue;
+            LinearLayout savedRow = Ui.horizontal(this);
+            savedRow.addView(Ui.text(this, entry.label, 13, Ui.TEXT, false),
+                    new LinearLayout.LayoutParams(0, Ui.dp(this, 41), 1));
+            savedRow.addView(Ui.pill(this, "Remove", () -> {
+                Prefs.clearPreset(this, entry.pkg); showHome();
+            }));
+            content.addView(savedRow);
+            Ui.gap(content, this, 4);
+        }
+        if (savedCount == 0)
+            content.addView(Ui.text(this, "No saved presets yet.", 12, Ui.MUTED, false));
+        Ui.gap(content, this, 22);
+
+        section("Two-app workspace",
+                "Choose two apps and a layout. OrbitBar requests two separate freeform windows; " +
+                "Pixel controls their final stacking and may adjust the positions.");
+        LinearLayout pairApps = Ui.horizontal(this);
+        addButton(pairApps, "① " + pairLabel(Prefs.pairFirst(this)),
+                () -> showConfigurationPicker(false, true));
+        addButton(pairApps, "② " + pairLabel(Prefs.pairSecond(this)),
+                () -> showConfigurationPicker(false, false));
+        content.addView(pairApps);
+        Ui.gap(content, this, 7);
+        LinearLayout layouts = Ui.horizontal(this);
+        addButton(layouts, "◧ Side by side", () -> {
+            Prefs.setPairLayout(this,"side"); showHome();
+        });
+        addButton(layouts, "▤ Stacked", () -> {
+            Prefs.setPairLayout(this,"stack"); showHome();
+        });
+        content.addView(layouts);
+        Ui.gap(content, this, 7);
+        content.addView(Ui.text(this, "Chosen layout: " +
+                (Prefs.pairLayout(this).equals("side") ? "Side by side" : "Stacked"),
+                13, Ui.ACCENT, true));
+        Ui.gap(content, this, 8);
+        content.addView(Ui.pill(this, "▶  Launch two-app workspace", this::launchConfiguredPair));
         Ui.gap(content, this, 24);
 
         section("Your pinned apps", "Pick which apps appear on the taskbar. Long-press an icon on the overlay to pin or unpin.");
@@ -240,6 +296,106 @@ public class MainActivity extends Activity {
                 "Split and Float shortcuts depend on your device's multi-window support. " +
                 "No Accessibility Service or full app-list permission is required.",
                 12, Ui.MUTED, false));
+    }
+    private void addWindowSlider(String title, boolean width) {
+        int min = 35, max = width ? 96 : 94;
+        int value = width ? Prefs.customWidth(this) : Prefs.customHeight(this);
+        TextView label = Ui.text(this, title + ": " + value + "%", 12, Ui.MUTED, false);
+        content.addView(label);
+        SeekBar bar = new SeekBar(this);
+        bar.setMax(max - min);
+        bar.setProgress(value - min);
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onStartTrackingTouch(SeekBar v) { }
+            public void onStopTrackingTouch(SeekBar v) {
+                if (width) Prefs.setCustomWidth(MainActivity.this, min + v.getProgress());
+                else Prefs.setCustomHeight(MainActivity.this, min + v.getProgress());
+                showHome();
+            }
+            public void onProgressChanged(SeekBar v, int progress, boolean fromUser) {
+                label.setText(title + ": " + (min + progress) + "%");
+            }
+        });
+        content.addView(bar);
+    }
+    private String pairLabel(String pkg) {
+        if (pkg == null || pkg.isEmpty()) return "Choose app";
+        for (AppRepository.Entry entry : apps)
+            if (pkg.equals(entry.pkg)) return abbreviate(entry.label, 12);
+        return "Unavailable";
+    }
+    private void launchConfiguredPair() {
+        if (!Prefs.pairReady(this)) {
+            Toast.makeText(this, "Choose two different apps first", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Intent request = new Intent(this, PixelFreeformActivity.class);
+        request.putExtra(PixelFreeformActivity.EXTRA_PACKAGE, Prefs.pairFirst(this));
+        request.putExtra(PixelFreeformActivity.EXTRA_SECOND, Prefs.pairSecond(this));
+        request.putExtra(PixelFreeformActivity.EXTRA_LAYOUT, Prefs.pairLayout(this));
+        startActivity(request);
+    }
+    private void showConfigurationPicker(boolean presets, boolean first) {
+        showingPicker = true;
+        shell();
+        content.addView(Ui.pill(this, "‹  Back to settings", this::showHome));
+        Ui.gap(content, this, 18);
+        section(presets ? "Per-app window presets" : (first ? "Choose first app" : "Choose second app"),
+                presets ? "Tap Save to store the current window size and position, or Reset to remove."
+                        : "Choose an app for your two-app workspace.");
+        EditText search = new EditText(this);
+        search.setSingleLine(true);
+        search.setHint("Search installed apps");
+        search.setTextColor(Ui.TEXT);
+        search.setHintTextColor(Ui.MUTED);
+        search.setPadding(Ui.dp(this,14),Ui.dp(this,8),Ui.dp(this,14),Ui.dp(this,8));
+        search.setBackground(Ui.shape(Ui.SURFACE, 13, this));
+        content.addView(search, new LinearLayout.LayoutParams(-1, Ui.dp(this, 49)));
+        Ui.gap(content,this,10);
+        LinearLayout rows = Ui.vertical(this);
+        content.addView(rows);
+        populateConfigurationRows(rows, "", presets, first);
+        search.addTextChangedListener(new TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+            public void onTextChanged(CharSequence s,int start,int before,int count){
+                populateConfigurationRows(rows,s.toString(),presets,first);
+            }
+            public void afterTextChanged(Editable e){}
+        });
+    }
+    private void populateConfigurationRows(LinearLayout rows,String filter,boolean presets,boolean first){
+        rows.removeAllViews();
+        String query=filter.toLowerCase(Locale.ROOT);
+        int n=0;
+        for(AppRepository.Entry entry:apps){
+            if(!entry.label.toLowerCase(Locale.ROOT).contains(query))continue;
+            if(++n>90)break;
+            LinearLayout row=Ui.horizontal(this);
+            row.setPadding(Ui.dp(this,6),Ui.dp(this,5),Ui.dp(this,6),Ui.dp(this,5));
+            ImageView image=new ImageView(this);
+            image.setImageDrawable(entry.icon);
+            row.addView(image,new LinearLayout.LayoutParams(Ui.dp(this,32),Ui.dp(this,32)));
+            Ui.hgap(row,this,10);
+            row.addView(Ui.text(this,entry.label,13,Ui.TEXT,false),
+                    new LinearLayout.LayoutParams(0,Ui.dp(this,41),1));
+            if(presets){
+                TextView action=Ui.pill(this,Prefs.hasPreset(this,entry.pkg)?"Reset":"Save",()->{
+                    if(Prefs.hasPreset(this,entry.pkg))Prefs.clearPreset(this,entry.pkg);
+                    else Prefs.savePreset(this,entry.pkg);
+                    populateConfigurationRows(rows,filter,true,first);
+                });
+                row.addView(action);
+            }else{
+                row.setOnClickListener(v->{
+                    Prefs.setPair(this,first,entry.pkg);
+                    showHome();
+                });
+                row.addView(Ui.text(this,"Select ›",12,Ui.ACCENT,true));
+            }
+            rows.addView(row);
+            Ui.gap(rows,this,3);
+        }
+        if(n==0)rows.addView(Ui.text(this,"No matching applications",13,Ui.MUTED,false));
     }
     private void setFreeformPosition(int x, int y) {
         Prefs.setFreeformPosition(this, x, y);
