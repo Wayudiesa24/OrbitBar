@@ -38,10 +38,21 @@ public class PixelFreeformActivity extends Activity {
         ActivityOptions options = ActivityOptions.makeBasic();
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int width = dm.widthPixels, height = dm.heightPixels;
-        int winW = (int)(width * (width > height ? .78f : .82f));
-        int winH = (int)(height * (width > height ? .80f : .75f));
-        options.setLaunchBounds(new Rect((width - winW) / 2, (height - winH) / 2,
-                (width + winW) / 2, (height + winH) / 2));
+        // This changes the requested START position, not an already-open window.
+        // Pixel's window manager may override these bounds on the active display.
+        float scale = Prefs.freeformCompact(this) ? 0.72f : 1.0f;
+        int marginX = Math.round(dm.density * 8);
+        int marginTop = Math.round(dm.density * 30);
+        int marginBottom = Math.round(dm.density * 40);
+        int usableW = Math.max(1, width - 2 * marginX);
+        int usableH = Math.max(1, height - marginTop - marginBottom);
+        int winW = Math.min(usableW,
+                (int)(width * (width > height ? .78f : .82f) * scale));
+        int winH = Math.min(usableH,
+                (int)(height * (width > height ? .80f : .75f) * scale));
+        int left = marginX + Math.round((usableW - winW) * Prefs.freeformX(this) / 100f);
+        int top = marginTop + Math.round((usableH - winH) * Prefs.freeformY(this) / 100f);
+        options.setLaunchBounds(new Rect(left, top, left + winW, top + winH));
         try {
             // Explicitly request freeform mode, rather than bounds alone.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -53,7 +64,7 @@ public class PixelFreeformActivity extends Activity {
                         .invoke(options, FREEFORM_WINDOWING_MODE);
             }
             startActivity(target, options.toBundle());
-            Toast.makeText(this, "Requested Pixel freeform (system decides the window mode)",
+            Toast.makeText(this, "Requested freeform at saved position (Pixel decides)",
                     Toast.LENGTH_SHORT).show();
         } catch (Throwable error) {
             Log.w(LOG, "Freeform launch blocked", error);

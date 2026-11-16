@@ -1,4 +1,20 @@
-# OrbitBar V0.4 — Hybrid Android Taskbar
+# OrbitBar V0.5 — Hybrid Android Taskbar
+
+**V0.5: Pixel Freeform window placement workaround**
+
+On the Pixel phone, freeform windows may be resizable but lack a working system drag handle.
+OrbitBar cannot add a working title bar to another app or control an existing third-party
+task's position without privileged OS support. Instead, **Pixel Float** now allows selecting
+five initial window placements (top-left, top-right, centre, bottom-left, bottom-right) and
+**Normal / Compact** size. The expanded panel provides quick placement buttons whenever Pixel Float
+is selected; the main OrbitBar settings screen also offers placement presets.
+Launch placement is applied through `ActivityOptions.setLaunchBounds`, with positions converted
+to screen pixels and bounded away from the screen margins. This requests the window's initial
+position **only**—it does not move an existing window. Pixel firmware may ignore positions.
+
+Existing draggable OrbitBar bubble, freeform API selection, and optional Orbit bubble host
+integration remain unchanged.
+
 
 **V0.4: Reuse Orbit-AI-Launcher freeform and Orbit bubble integration**
 

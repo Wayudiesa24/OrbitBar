@@ -68,7 +68,7 @@ public class MainActivity extends Activity {
     private void showHome() {
         showingPicker = false;
         shell();
-        TextView eyebrow = Ui.text(this, "ORBIT SYSTEMS  /  V0.3", 11, Ui.ACCENT, true);
+        TextView eyebrow = Ui.text(this, "ORBIT SYSTEMS  /  V0.5", 11, Ui.ACCENT, true);
         content.addView(eyebrow); Ui.gap(content, this, 8);
         content.addView(Ui.text(this, "OrbitBar", 34, Ui.TEXT, true));
         Ui.gap(content, this, 4);
@@ -146,6 +146,33 @@ public class MainActivity extends Activity {
         content.addView(bubbleSeek);
         Ui.gap(content, this, 24);
 
+        section("Pixel Freeform window placement",
+                "Choose where a floating app starts. This cannot drag an already-open window. " +
+                "Pixel may adjust the requested location.");
+        LinearLayout startPosition = Ui.horizontal(this);
+        addButton(startPosition, "↖ Top-left", () -> setFreeformPosition(0, 0));
+        addButton(startPosition, "⊙ Centre", () -> setFreeformPosition(50, 50));
+        addButton(startPosition, "↗ Top-right", () -> setFreeformPosition(100, 0));
+        content.addView(startPosition);
+        Ui.gap(content, this, 7);
+        LinearLayout lowerPosition = Ui.horizontal(this);
+        addButton(lowerPosition, "↙ Bottom-left", () -> setFreeformPosition(0, 100));
+        addButton(lowerPosition, "↘ Bottom-right", () -> setFreeformPosition(100, 100));
+        content.addView(lowerPosition);
+        Ui.gap(content, this, 9);
+        String positionName = freeformPositionName();
+        content.addView(Ui.text(this, "Freeform start position: " + positionName,
+                13, Ui.ACCENT, true));
+        Ui.gap(content, this, 8);
+        boolean compact = Prefs.freeformCompact(this);
+        content.addView(Ui.pill(this, compact
+                ? "▣ Window size: Compact (tap for Normal)"
+                : "▣ Window size: Normal (tap for Compact)", () -> {
+            Prefs.setFreeformCompact(this, !Prefs.freeformCompact(this));
+            showHome();
+        }));
+        Ui.gap(content, this, 24);
+
         section("Your pinned apps", "Pick which apps appear on the taskbar. Long-press an icon on the overlay to pin or unpin.");
         HorizontalScrollView pinnedScroll = new HorizontalScrollView(this);
         pinnedScroll.setHorizontalScrollBarEnabled(false);
@@ -213,6 +240,18 @@ public class MainActivity extends Activity {
                 "Split and Float shortcuts depend on your device's multi-window support. " +
                 "No Accessibility Service or full app-list permission is required.",
                 12, Ui.MUTED, false));
+    }
+    private void setFreeformPosition(int x, int y) {
+        Prefs.setFreeformPosition(this, x, y);
+        showHome();
+    }
+    private String freeformPositionName() {
+        int x = Prefs.freeformX(this), y = Prefs.freeformY(this);
+        if (x == 0 && y == 0) return "Top-left";
+        if (x == 100 && y == 0) return "Top-right";
+        if (x == 0 && y == 100) return "Bottom-left";
+        if (x == 100 && y == 100) return "Bottom-right";
+        return "Centre";
     }
     private String modeName(String mode) {
         switch (mode) {

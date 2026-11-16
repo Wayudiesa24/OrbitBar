@@ -483,6 +483,10 @@ public class OverlayService extends Service {
         }
         panel.addView(orbitMode, new LinearLayout.LayoutParams(-1, Ui.dp(this, 39)));
         Ui.gap(panel, this, 7);
+        if ("float".equals(Prefs.launchMode(this))) {
+            buildFreeformPositionControls(panel);
+            Ui.gap(panel, this, 6);
+        }
         panel.addView(Ui.text(this,
                 "Pixel Float requests a real freeform app window (developer options required). " +
                 "Bubble in Orbit passes the app to your installed Orbit bubble host. " +
@@ -519,6 +523,39 @@ public class OverlayService extends Service {
         addMedia(panel);
         Ui.gap(panel, this, 8);
         addControls(panel);
+    }
+    private void buildFreeformPositionControls(LinearLayout panel) {
+        LinearLayout labelRow = Ui.horizontal(this);
+        labelRow.addView(Ui.text(this, "FREEFORM START POSITION", 10, Ui.ACCENT, true),
+                new LinearLayout.LayoutParams(0, Ui.dp(this, 34), 1));
+        boolean compact = Prefs.freeformCompact(this);
+        labelRow.addView(button(compact ? "Size: Compact" : "Size: Normal", () -> {
+            Prefs.setFreeformCompact(this, !Prefs.freeformCompact(this));
+            render();
+        }));
+        panel.addView(labelRow);
+        LinearLayout choices = Ui.horizontal(this);
+        final String[] labels = {"↖", "↗", "⊙", "↙", "↘"};
+        final int[] xValues = {0, 100, 50, 0, 100};
+        final int[] yValues = {0, 0, 50, 100, 100};
+        for (int i = 0; i < labels.length; i++) {
+            final int x = xValues[i];
+            final int y = yValues[i];
+            TextView choice = button(labels[i], () -> {
+                Prefs.setFreeformPosition(this, x, y);
+                render();
+            });
+            choice.setContentDescription("Start window at " +
+                    (i == 0 ? "top left" : i == 1 ? "top right" : i == 2
+                            ? "center" : i == 3 ? "bottom left" : "bottom right"));
+            if (Prefs.freeformX(this) == x && Prefs.freeformY(this) == y) {
+                choice.setBackground(Ui.shape(0xFF4B5C9D, 12, this));
+            }
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, Ui.dp(this, 35), 1);
+            p.setMargins(0, 0, Ui.dp(this, 4), 0);
+            choices.addView(choice, p);
+        }
+        panel.addView(choices);
     }
     private void populateResults(LinearLayout results, String query) {
         results.removeAllViews();

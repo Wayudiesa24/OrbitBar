@@ -26,6 +26,16 @@ final class Prefs {
     static int miniX(Context c) { return p(c).getInt("miniX", -1); }
     static int miniY(Context c) { return p(c).getInt("miniY", -1); }
     static void setMiniPosition(Context c, int x, int y) { p(c).edit().putInt("miniX", x).putInt("miniY", y).apply(); }
+    static int freeformX(Context c) { return p(c).getInt("freeformX", 50); }
+    static int freeformY(Context c) { return p(c).getInt("freeformY", 50); }
+    static void setFreeformPosition(Context c, int x, int y) {
+        p(c).edit().putInt("freeformX", Math.max(0, Math.min(100, x)))
+                .putInt("freeformY", Math.max(0, Math.min(100, y))).apply();
+    }
+    static boolean freeformCompact(Context c) { return p(c).getBoolean("freeformCompact", false); }
+    static void setFreeformCompact(Context c, boolean compact) {
+        p(c).edit().putBoolean("freeformCompact", compact).apply();
+    }
     static String launchMode(Context c) { return p(c).getString("launchMode", "normal"); }
     static void setLaunchMode(Context c, String mode) { p(c).edit().putString("launchMode", mode).apply(); }
     static List<String> pins(Context c) { return decode(p(c).getString("pins", "")); }
