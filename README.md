@@ -1,4 +1,14 @@
-# OrbitBar V0.5 — Hybrid Android Taskbar
+# OrbitBar V0.6 — Hybrid Android Taskbar
+
+**V0.6 — Custom freeform windows and one-tap workspaces**
+
+- **Four window sizes:** Small (59% × 54%), Medium (82% × 75%), Large (94% × 88%), and Custom (adjustable width 35–96% and height 35–94%). Sizes are relative to display resolution. The v0.5 compact preference is honoured until a new size is chosen.
+- **Per-app saved window presets:** Set the default position and size in Settings, then Save a preset for each app. OrbitBar's Pixel Float automatically requests the saved position and size when that app is opened. Save/Reset buttons are also available beside app names in Pixel Float mode.
+- **Two-app workspace:** Choose two different apps and select Side-by-side or Stacked in Settings; launch from Settings or the expanded OrbitBar panel. Both apps are requested as independent freeform windows, not true split-screen. On a narrow Pixel display, Android's minimum window dimensions or stacking behaviour may cause overlap.
+- **Quick controls:** More position and size presets in the launcher; expanded overlay can scroll vertically on smaller phone screens.
+- **Limitations:** The window-management code changes *initial launch bounds*, not the position or size of an already-running third-party app. Freeform mode still relies on Android's unsupported hidden API and may change after system updates. Apps or OEM firmware may ignore bounds or disallow multi-window.
+
+
 
 **V0.5: Pixel Freeform window placement workaround**
 
