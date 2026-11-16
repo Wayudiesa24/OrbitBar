@@ -36,6 +36,70 @@ final class Prefs {
     static void setFreeformCompact(Context c, boolean compact) {
         p(c).edit().putBoolean("freeformCompact", compact).apply();
     }
+
+    static String windowSizeMode(Context c) {
+        return p(c).getString("windowSizeMode", freeformCompact(c) ? "small" : "medium");
+    }
+    static void setWindowSizeMode(Context c, String v) {
+        if (v.equals("small") || v.equals("medium") || v.equals("large") || v.equals("custom"))
+            p(c).edit().putString("windowSizeMode", v).apply();
+    }
+    static int windowWidth(Context c) {
+        switch (windowSizeMode(c)) {
+            case "small": return 59; case "large": return 94;
+            case "custom": return p(c).getInt("customWidth", 70);
+            default: return 82;
+        }
+    }
+    static int windowHeight(Context c) {
+        switch (windowSizeMode(c)) {
+            case "small": return 54; case "large": return 88;
+            case "custom": return p(c).getInt("customHeight", 65);
+            default: return 75;
+        }
+    }
+    static int customWidth(Context c) { return p(c).getInt("customWidth", 70); }
+    static int customHeight(Context c) { return p(c).getInt("customHeight", 65); }
+    static void setCustomWidth(Context c, int v) {
+        p(c).edit().putInt("customWidth", clamp(v,35,96)).putString("windowSizeMode","custom").apply();
+    }
+    static void setCustomHeight(Context c, int v) {
+        p(c).edit().putInt("customHeight", clamp(v,35,94)).putString("windowSizeMode","custom").apply();
+    }
+    private static int clamp(int v,int lo,int hi) { return Math.max(lo,Math.min(hi,v)); }
+    private static String presetKey(String pkg) { return "windowPreset:" + pkg; }
+    static boolean hasPreset(Context c,String pkg) { return pkg!=null && p(c).contains(presetKey(pkg)); }
+    static void savePreset(Context c,String pkg) {
+        if (pkg==null || pkg.isEmpty()) return;
+        String v=freeformX(c)+","+freeformY(c)+","+windowWidth(c)+","+windowHeight(c);
+        p(c).edit().putString(presetKey(pkg),v).apply();
+    }
+    static void clearPreset(Context c,String pkg) {
+        if (pkg!=null) p(c).edit().remove(presetKey(pkg)).apply();
+    }
+    static int[] windowSpec(Context c,String pkg) {
+        int[] standard={freeformX(c),freeformY(c),windowWidth(c),windowHeight(c)};
+        if (!hasPreset(c,pkg)) return standard;
+        String[] s=p(c).getString(presetKey(pkg),"").split(",");
+        if(s.length!=4)return standard;
+        try { return new int[]{clamp(Integer.parseInt(s[0]),0,100),
+                clamp(Integer.parseInt(s[1]),0,100),clamp(Integer.parseInt(s[2]),35,96),
+                clamp(Integer.parseInt(s[3]),35,94)}; }
+        catch(NumberFormatException ex){return standard;}
+    }
+    static String pairFirst(Context c){return p(c).getString("pairFirst","");}
+    static String pairSecond(Context c){return p(c).getString("pairSecond","");}
+    static void setPair(Context c,boolean first,String pkg){
+        p(c).edit().putString(first?"pairFirst":"pairSecond",pkg).apply();
+    }
+    static String pairLayout(Context c){return p(c).getString("pairLayout","side");}
+    static void setPairLayout(Context c,String mode){
+        p(c).edit().putString("pairLayout",mode.equals("stack")?"stack":"side").apply();
+    }
+    static boolean pairReady(Context c){
+        return !pairFirst(c).isEmpty() && !pairSecond(c).isEmpty()
+                && !pairFirst(c).equals(pairSecond(c));
+    }
     static String launchMode(Context c) { return p(c).getString("launchMode", "normal"); }
     static void setLaunchMode(Context c, String mode) { p(c).edit().putString("launchMode", mode).apply(); }
     static List<String> pins(Context c) { return decode(p(c).getString("pins", "")); }
